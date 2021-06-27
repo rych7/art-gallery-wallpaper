@@ -1,4 +1,4 @@
-import os
+import sys
 from tkinter import *
 from tkinter import ttk, colorchooser
 from ttkthemes import ThemedTk
@@ -7,19 +7,21 @@ import requests
 from selenium import webdriver
 from io import BytesIO
 import ctypes
+import time
 
+#default globals
 categories = ["trending", "anime_manga", "illustration", "concept_art", "science_fiction", "abstract", "fantasy", "game_art"]
-category = "trending"
+category = "abstract"
 search_url = "https://www.artstation.com/?sort_by=trending"
 thumbnails = set()
-s_width = 0
-s_height = 0
+s_width = 1680
+s_height = 1050
 gap_pc = 5    #gap percentage
 gap = 0
 rows = 4
-cols = 4
+cols = 6
 max_images = rows*cols
-color_code = None
+color_code = [0,0,0]
 
 class Gui(Frame):
     def __init__(self, master=None):
@@ -63,39 +65,40 @@ class Gui(Frame):
         color_btn.grid(row=4, column=2)
         update_btn.grid(row = 5, column = 2)
         #######
-        #get screen resolution
-        s_width = root.winfo_screenwidth()  #screen width
-        s_height = root.winfo_screenheight() #screen height
+
     def set_color(self):
         global color_code
-        color_code = colorchooser.askcolor(title="Choose Color")
-        print(str(color_code[0]))
+        color_code = colorchooser.askcolor(title="Choose Color")[0]
+        #print(str(color_code[0]))
     def set_cat(self, master):
         global category
         category = self.cat_input.get()
-        print("category="+str(category))
+        #print("category="+str(category))
     def set_gap(self, master):
         global gap_pc
         gap_pc = self.gap_input.get()
-        print('gap='+str(gap_pc))
+        #print('gap='+str(gap_pc))
     def set_rows(self):
         global rows
         rows = self.rows_input.get()
-        print('rows='+str(rows))
+        #print('rows='+str(rows))
     def set_cols(self):
         global cols
         cols = self.cols_input.get()
-        print('rows='+str(cols))
+        #print('rows='+str(cols))
 
 def update_bkgd():
     global max_images, gap
     max_images = rows*cols
     gap = .01*gap_pc*s_height
     set_url()
+    #tic = time.perf_counter()
     fetch_images()
     collage()
-    set_backgd()
-    print("Wallpaper updated.")
+    set_bkgd()
+    #toc=time.perf_counter()
+
+    #print("Wallpaper updated:" + ", TIME: " + str(toc-tic))
 
 def set_url():
     global search_url
@@ -105,24 +108,29 @@ def set_url():
         else:
             search_url = "https://www.artstation.com/channels/"+category+"?sort_by=trending"
 
+#fetches image thumbnails using selenium and pastes onto image grid
 def fetch_images():
     global thumbnails
     thumbnails.clear()
     #path for ChromeDriver here
     PATH = "C:/Users/rchum/source/Projects/chromedriver_win32/chromedriver"
-    wd = webdriver.Chrome(executable_path=PATH)
+    chrome_options = webdriver.ChromeOptions()
+    #disable popup
+    chrome_options.add_argument("--headless")
+    wd = webdriver.Chrome(executable_path=PATH, options=chrome_options)
     wd.get(search_url)
     elements = wd.find_elements_by_class_name("d-block")
     #store thumbnail urls in array
-    for x in range(max_images):
-        t = elements[x].get_attribute("src")
-        if t:
-            thumbnails.add(t)
+    for t in range(max_images):
+        url = elements[t].get_attribute("src")
+        if url:
+            thumbnails.add(url)
+        
     wd.quit()
 
 def collage():
     #create new image
-    r,g,b = int(color_code[0][0]), int(color_code[0][1]), int(color_code[0][2])
+    r,g,b = int(color_code[0]), int(color_code[1]), int(color_code[2])
     new_image = Image.new('RGBA', (s_width, s_height), (r,g,b,1))
     img_height = int(((.9-.01*gap_pc*(rows-1))*s_height)/rows)
     x_start = int((s_width-(img_height*cols+gap*(cols-1)))/2)
@@ -134,7 +142,6 @@ def collage():
             #open url using requests
             response = requests.get(url)
             img = Image.open(BytesIO(response.content))
-            width, height = img.size
             r_img = img.resize((img_height, img_height))
             #paste image to indexed location
             new_image.paste(r_img, (int(x_start+img_height*x+gap*x), int(y_start+img_height*y+gap*y)))
@@ -148,12 +155,19 @@ def collage():
         pass
     new_image.save("C:/Users/rchum/Pictures/output_image.png")
 
-def set_backgd():
+def set_bkgd():
     ctypes.windll.user32.SystemParametersInfoW(20, 0, "C:/Users/rchum/Pictures/output_image.png" , 0)
 
 
 if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        update_bkgd()
+        sys.exit(0)    
     root = ThemedTk()
+    #get screen resolution
+    s_width = root.winfo_screenwidth()  #screen width
+    s_height = root.winfo_screenheight() #screen height
+
     root.title("Art Gallery Wallpaper")
     window = Gui(root)
     root.mainloop()
